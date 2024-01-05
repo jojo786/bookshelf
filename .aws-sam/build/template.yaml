@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Bookshelf: an app to manage your reading list - running on AWS Serverless'
+Parameters:
+  FQDN:
+    Type: String
+    Description: Fully qualified domain name, for example ip.eol.dev
+Globals:
+  Function:
+    Timeout: 40
+    MemorySize: 128
+    Runtime: python3.12
+    Tags:
+      project: Bookshelf
+    Architectures:
+    - arm64
+    ReservedConcurrentExecutions: 1
+    LoggingConfig:
+      LogGroup:
+        Fn::Sub: /aws/lambda/${AWS::StackName}
+      LogFormat: JSON
+Resources:
+  FlaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: FlaskFunction
+      Handler: run.sh
+      Events:
+        FlaskApi:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: FlaskHttpApiGateway
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          PORT: 8000
+          BookshelfTable:
+            Ref: BookshelfTable
+      Layers:
+      - Fn::Sub: arn:aws:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerArm64:17
+    Connectors:
+      PowerUpdaterTableConnector:
+        Properties:
+          Destination:
+            Id: BookshelfTable
+          Permissions:
+          - Read
+          - Write
+    Metadata:
+      SamResourceId: FlaskFunction
+  BookshelfTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+      - Value: Bookshelf
+        Key: project
+  GenerateCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName:
+        Ref: FQDN
+      ValidationMethod: DNS
+      DomainValidationOptions:
+      - DomainName:
+          Ref: FQDN
+        ValidationDomain:
+          Ref: FQDN
+      Tags:
+      - Key: project
+        Value: Bookshelf
+  FlaskHttpApiGateway:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Domain:
+        DomainName:
+          Ref: FQDN
+        CertificateArn:
+          Ref: GenerateCertificate
+      PropagateTags: true
+Outputs:
+  FlaskFunctionApi:
+    Description: API Gateway endpoint URL for FlaskFunction
+    Value:
+      Fn::Sub: https://${FlaskHttpApiGateway}.execute-api.${AWS::Region}.${AWS::URLSuffix}/
+  BookshelfTable:
+    Description: ARN of the Books table
+    Value:
+      Ref: BookshelfTable

@@ -1,0 +1,9 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "bookshelf"
+resolve_s3 = true
+s3_prefix = "bookshelf"
+region = "af-south-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "FQDN=\"bookshelf.hacksaw.co.za\""
+image_repositories = []
